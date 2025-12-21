@@ -27,5 +27,28 @@ and which dependencies.
 * Calculate diff between "current active version" and "known deployed versions" 
   * repeated calculations should give the same result
   * execute operations against dt to sync
+  * config set a version that has no more active environments to inactive? if it ever was active?
 * Idempotency and resync (`ResyncPeriod` I think)
 * Does it make sense to have a sync state?
+
+## Local development (docker desktop or similar)
+
+You need kubernetes and some ingress controller (nginx).
+
+### Dependency-Track installation
+
+```bash
+helm install dtrack dependency-track/dependency-track -f local-values.yaml --namespace dtrack --create-namespace
+```
+
+### Dependency-Track Updates
+
+```bash
+helm install dtrack dependency-track/dependency-track --namespace dtrack -f local-values.yaml --replace
+```
+
+### Dependency-Track Uninstall
+
+```bash
+helm uninstall dtrack --namespace dtrack
+```
