@@ -11,3 +11,21 @@ The idea of this controller is to observe the deployments and then update
 dependency-tracker versions (which are created using SBOM during the build)
 so that it can immediately be tracked which environment has currently which version
 and which dependencies.
+
+## Thoughts
+
+* Matching dependency-track names with kubernetes: `app.kubernetes.io/name` (but may need a mapping using a crd)
+* Matching versions: `app.kubernetes.io/version` (what to do if there is no version`?)
+* Matching environment: `security.dependencytrack/environment` may be
+* config: needs a CRD: base url, features activated, timeouts, ...
+* scale-to-zero / version change / delete: 
+  * remove env tag
+  * add customproperty: env-???:lastSeenAt=
+* Trigger: deployment status, meaning
+  * status.availableReplicas == status.replicas (needs validation)
+  * `Progressing` and `Available` conditgions both `true`
+* Calculate diff between "current active version" and "known deployed versions" 
+  * repeated calculations should give the same result
+  * execute operations against dt to sync
+* Idempotency and resync (`ResyncPeriod` I think)
+* Does it make sense to have a sync state?
