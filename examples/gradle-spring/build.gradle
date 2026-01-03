@@ -157,10 +157,10 @@ task uploadSbom {
 		formData.append("Content-Disposition: form-data; name=\"isLatest\"\r\n\r\n")
 		formData.append("true\r\n")
 		
-		// dtc:cluster field
+		// Properties field for dtc:cluster
 		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"dtc:cluster\"\r\n\r\n")
-		formData.append("[\"internal\"]\r\n")
+		formData.append("Content-Disposition: form-data; name=\"properties\"\r\n\r\n")
+		formData.append('{"dtc:cluster": ["internal"]}\r\n')
 		
 		// BOM file field
 		formData.append("--${boundary}\r\n")
