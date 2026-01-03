@@ -87,16 +87,12 @@ tasks.named('test') {
 cyclonedxBom {
 	projectType = "application"
 	componentVersion = project.version.toString()
-
-	includeConfigs = listOf("runtimeClasspath", "compileClasspath")
 }
 
 cyclonedxDirectBom {
 	projectType = "application"
 	componentVersion = project.version.toString()
 
-
-	includeConfigs = listOf("runtimeClasspath", "compileClasspath")
 }
 
 project.ext.dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
