@@ -39,6 +39,14 @@ You need kubernetes and some ingress controller (nginx).
 
 Assuming you have installed Docker Desktop. There is an example for minikube and a description on the DTrack Helm Github Repo for any other scenario.
 
+First, create the persistent volume (for data persistence across restarts):
+
+```bash
+kubectl apply -f examples/dtrack-helm/persistent-volume.yaml
+```
+
+Then install DependencyTrack:
+
 ```bash
 helm install dtrack dependency-track/dependency-track -f examples/dtrack-helm/local-docker-desktop.yaml --namespace dtrack --create-namespace
 ```
@@ -46,12 +54,11 @@ helm install dtrack dependency-track/dependency-track -f examples/dtrack-helm/lo
 ### Dependency-Track Updates
 
 ```bash
-helm install dtrack dependency-track/dependency-track --namespace dtrack -f examples/dtrack-helm/local-docker-desktop.yaml --replace
+helm upgrade dtrack dependency-track/dependency-track --namespace dtrack -f examples/dtrack-helm/local-docker-desktop.yaml
 ```
 
 ### Dependency-Track Uninstall
 
 ```bash
 helm uninstall dtrack --namespace dtrack
-kubectl delete ns dtrack
 ```

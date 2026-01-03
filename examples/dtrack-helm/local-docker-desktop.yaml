@@ -6,9 +6,10 @@ apiServer:
     limits:
       cpu: "2"
       memory: "4Gi"
-  # persistentVolume:
-  #   enabled: true
-  #   className: "standard"
+  persistentVolume:
+    enabled: true
+    className: "dtrack-local-storage"  # Use our custom storage class
+    size: "4Gi"
   service:
     type: NodePort
     nodePort: 30080

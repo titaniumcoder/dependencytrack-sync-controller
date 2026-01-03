@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dtrack-data-pv
+  namespace: dtrack
+  labels:
+    app: dependency-track
+    component: apiserver
+spec:
+  capacity:
+    storage: 4Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dtrack-local-storage
+  hostPath:
+    path: /tmp/dtrack-data
+    type: DirectoryOrCreate
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dtrack-local-storage
+  namespace: dtrack
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
