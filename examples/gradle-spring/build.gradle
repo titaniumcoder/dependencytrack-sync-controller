@@ -1,0 +1,172 @@
+plugins {
+	id 'org.jetbrains.kotlin.jvm' version '2.2.21'
+	id 'org.jetbrains.kotlin.plugin.spring' version '2.2.21'
+	id 'org.springframework.boot' version '4.0.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.cyclonedx.bom' version '3.0.1'
+	id 'com.palantir.git-version' version '3.1.0'
+}
+
+group = 'com.github.titaniumcoder.dtrack'
+version = gitVersion()
+description = 'Demo project for Spring Boot'
+
+// Git-based versioning configuration
+gitVersion {
+	prefix = 'demo-v'
+	fallbackVersion = '0.1.0-dev'
+	dirty = { it + '-dirty' }
+	versionDetails { gitDetails ->
+		if (gitDetails.isCleanTag) {
+			return gitDetails.lastTag.replaceFirst(/^demo-v/, '')
+		} else if (gitDetails.commitDistance == 0) {
+			return "${gitDetails.lastTag.replaceFirst(/^demo-v/, '')}-dirty"
+		} else {
+			def baseVersion = gitDetails.lastTag ? gitDetails.lastTag.replaceFirst(/^demo-v/, '') : '0.1.0'
+			return "${baseVersion}-${gitDetails.commitDistance}-g${gitDetails.gitHash.substring(0, 7)}"
+		}
+	}
+}
+
+// Show version info during build
+tasks.register('showVersion') {
+	group = 'versioning'
+	description = 'Shows the current project version derived from Git'
+	doLast {
+		println "\n=== Project Version: ${project.version} ==="
+		def details = versionDetails()
+		println "Git: ${details.lastTag ?: 'no tags'} (${details.commitDistance} commits, ${details.branchName ?: 'unknown'})\n"
+	}
+}
+
+// Automatically show version at the start of build
+tasks.named('build') {
+	dependsOn 'showVersion'
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.jetbrains.kotlin:kotlin-reflect'
+	implementation 'tools.jackson.module:jackson-module-kotlin'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	testImplementation 'org.springframework.boot:spring-boot-starter-thymeleaf-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+kotlin {
+	compilerOptions {
+		freeCompilerArgs.addAll '-Xjsr305=strict', '-Xannotation-default-target=param-property'
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+cyclonedxBom {
+	projectType = "application"
+}
+
+cyclonedxDirectBom {
+	projectType = "application"
+}
+
+project.ext.dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
+project.ext.dtApiKey = project.findProperty('dtApiKey') ?: ''
+project.ext.dtProjectName = project.findProperty('dtProjectName') ?: "${project.group}.${project.name}"
+project.ext.dtProjectVersion = project.findProperty('dtProjectVersion') ?: project.version
+
+// could use also a plugin but I don't want to have the necessity to track the plugin updates
+task uploadSbom {
+	group = 'dependency track'
+	description = 'Uploads the generated SBOM to DependencyTrack'
+	dependsOn cyclonedxBom
+	
+	doLast {
+		def sbomFile = file("$buildDir/reports/cyclonedx-direct/bom.json")
+		
+		if (!sbomFile.exists()) {
+			throw new GradleException("SBOM file not found at ${sbomFile.absolutePath}. Run cyclonedxBom task first.")
+		}
+		
+		if (project.ext.dtApiKey.isEmpty()) {
+			throw new GradleException("DependencyTrack API key is required. Set dtApiKey property.")
+		}
+		
+		println "Uploading SBOM to DependencyTrack..."
+		println "  - Base URL: ${project.ext.dtBaseUrl}"
+		println "  - Project Name: ${project.ext.dtProjectName}"
+		println "  - Project Version: ${project.ext.dtProjectVersion}"
+		println "  - SBOM File: ${sbomFile.absolutePath}"
+		
+		def url = "${project.ext.dtBaseUrl}/api/v1/bom"
+		
+		// Create multipart form data payload
+		def boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replaceAll("-", "")
+		def connection = new URL(url).openConnection()
+		
+		connection.setRequestMethod("POST")
+		connection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
+		connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=${boundary}")
+		connection.setDoOutput(true)
+		
+		// Build multipart form data
+		def formData = new StringBuilder()
+		
+		// Project name field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"projectName\"\r\n\r\n")
+		formData.append("${project.ext.dtProjectName}\r\n")
+		
+		// Project version field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"projectVersion\"\r\n\r\n")
+		formData.append("${project.ext.dtProjectVersion}\r\n")
+		
+		// Auto create field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"autoCreate\"\r\n\r\n")
+		formData.append("true\r\n")
+		
+		// BOM file field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"bom\"\r\n\r\n")
+		formData.append(sbomFile.text)
+		formData.append("\r\n--${boundary}--\r\n")
+		
+		// Send the data
+		connection.outputStream << formData.toString().bytes
+		
+		def responseCode = connection.responseCode
+		def responseMessage = connection.responseMessage
+		
+		if (responseCode >= 200 && responseCode < 300) {
+			println "✅ SBOM uploaded successfully (${responseCode})"
+		} else {
+			def errorStream = connection.errorStream
+			def errorMessage = errorStream ? errorStream.text : "No details available"
+			throw new GradleException("Upload failed: ${responseCode} ${responseMessage}\\n${errorMessage}")
+		}
+	}
+}

@@ -37,18 +37,21 @@ You need kubernetes and some ingress controller (nginx).
 
 ### Dependency-Track installation
 
+Assuming you have installed Docker Desktop. There is an example for minikube and a description on the DTrack Helm Github Repo for any other scenario.
+
 ```bash
-helm install dtrack dependency-track/dependency-track -f local-values.yaml --namespace dtrack --create-namespace
+helm install dtrack dependency-track/dependency-track -f examples/dtrack-helm/local-docker-desktop.yaml --namespace dtrack --create-namespace
 ```
 
 ### Dependency-Track Updates
 
 ```bash
-helm install dtrack dependency-track/dependency-track --namespace dtrack -f local-values.yaml --replace
+helm install dtrack dependency-track/dependency-track --namespace dtrack -f examples/dtrack-helm/local-docker-desktop.yaml --replace
 ```
 
 ### Dependency-Track Uninstall
 
 ```bash
 helm uninstall dtrack --namespace dtrack
+kubectl delete ns dtrack
 ```

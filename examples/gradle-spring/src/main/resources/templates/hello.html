@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World - Spring Boot Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .api-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            border-left: 4px solid #667eea;
+        }
+
+        .api-info h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .api-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 0.3rem 0.8rem;
+            border-radius: 5px;
+            display: inline-block;
+            margin-top: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .api-link:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateX(3px);
+        }
+
+        .footer {
+            margin-top: 2rem;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .container > * {
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        .container > *:nth-child(2) { animation-delay: 0.1s; }
+        .container > *:nth-child(3) { animation-delay: 0.2s; }
+        .container > *:nth-child(4) { animation-delay: 0.3s; }
+        .container > *:nth-child(5) { animation-delay: 0.4s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 th:text="${message}">Hello World!</h1>
+        <div class="badge">Spring Boot + Thymeleaf</div>
+        <p class="subtitle" th:text="${subtitle}">Welcome to our beautiful Spring Boot application</p>
+        
+        <div class="api-info">
+            <h3>🚀 API Endpoint Available</h3>
+            <p>Try our JSON API endpoint:</p>
+            <a href="/api/hello" class="api-link" target="_blank">/api/hello</a>
+        </div>
+        
+        <div class="footer">
+            <p>Created with ❤️ using Spring Boot & Thymeleaf</p>
+        </div>
+    </div>
+</body>
+</html>
