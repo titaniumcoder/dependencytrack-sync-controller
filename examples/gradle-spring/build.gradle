@@ -5,6 +5,7 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'org.cyclonedx.bom' version '3.0.1'
 	id 'com.palantir.git-version' version '3.1.0'
+	id 'com.liftric.dependency-track-companion-plugin' version '1.3.0'
 }
 
 group = 'com.github.titaniumcoder.dtrack'
@@ -92,140 +93,15 @@ cyclonedxBom {
 cyclonedxDirectBom {
 	projectType = "application"
 	componentVersion = project.version.toString()
-
 }
 
-project.ext.dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
-project.ext.dtApiKey = project.findProperty('dtApiKey') ?: ''
-project.ext.dtProjectName = project.findProperty('dtProjectName') ?: "${project.group}.${project.name}"
-project.ext.dtProjectVersion = project.findProperty('dtProjectVersion') ?: project.version
-
-// could use also a plugin but I don't want to have the necessity to track the plugin updates
-task uploadSbom {
-	group = 'dependency track'
-	description = 'Uploads the generated SBOM to DependencyTrack'
-	dependsOn cyclonedxBom
-	
-	doLast {
-		def sbomFile = file("$buildDir/reports/cyclonedx-direct/bom.json")
-		
-		if (!sbomFile.exists()) {
-			throw new GradleException("SBOM file not found at ${sbomFile.absolutePath}. Run cyclonedxBom task first.")
-		}
-		
-		if (project.ext.dtApiKey.isEmpty()) {
-			throw new GradleException("DependencyTrack API key is required. Set dtApiKey property.")
-		}
-		
-		println "Uploading SBOM to DependencyTrack..."
-		println "  - Base URL: ${project.ext.dtBaseUrl}"
-		println "  - Project Name: ${project.ext.dtProjectName}"
-		println "  - Project Version: ${project.ext.dtProjectVersion}"
-		println "  - SBOM File: ${sbomFile.absolutePath}"
-		
-		def url = "${project.ext.dtBaseUrl}/api/v1/bom"
-		
-		// Create multipart form data payload
-		def boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replaceAll("-", "")
-		def connection = new URL(url).openConnection()
-		
-		connection.setRequestMethod("POST")
-		connection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
-		connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=${boundary}")
-		connection.setDoOutput(true)
-		
-		// Build multipart form data
-		def formData = new StringBuilder()
-		
-		// Project name field
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"projectName\"\r\n\r\n")
-		formData.append("${project.ext.dtProjectName}\r\n")
-		
-		// Project version field
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"projectVersion\"\r\n\r\n")
-		formData.append("${project.ext.dtProjectVersion}\r\n")
-		
-		// Auto create field
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"autoCreate\"\r\n\r\n")
-		formData.append("true\r\n")
-		
-		// isLatest field
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"isLatest\"\r\n\r\n")
-		formData.append("true\r\n")
-		
-		// BOM file field
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"bom\"\r\n\r\n")
-		formData.append(sbomFile.text)
-		formData.append("\r\n--${boundary}--\r\n")
-		
-		// Send the data
-		connection.outputStream << formData.toString().bytes
-		
-		def responseCode = connection.responseCode
-		def responseMessage = connection.responseMessage
-		
-		if (responseCode >= 200 && responseCode < 300) {
-			println "✅ SBOM uploaded successfully (${responseCode})"
-			
-			// Now create the dtc:cluster property
-			def response = connection.inputStream.text
-			def jsonSlurper = new groovy.json.JsonSlurper()
-			def result = jsonSlurper.parseText(response)
-			def token = result.token
-			
-			println "🔧 Creating project properties..."
-			
-			// Wait a bit for the BOM to be processed
-			Thread.sleep(2000)
-			
-			// Find the project UUID by searching for it
-			def projectSearchUrl = "${project.ext.dtBaseUrl}/api/v1/project"
-			def searchConnection = new URL("${projectSearchUrl}?name=${URLEncoder.encode(project.ext.dtProjectName, 'UTF-8')}").openConnection()
-			searchConnection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
-			
-			def projectsResponse = searchConnection.inputStream.text
-			def projectsResult = jsonSlurper.parseText(projectsResponse)
-			
-			if (projectsResult && projectsResult.size() > 0) {
-				def projectUuid = projectsResult[0].uuid
-				
-				// Create dtc:cluster property
-				def propertyUrl = "${project.ext.dtBaseUrl}/api/v1/project/${projectUuid}/property"
-				def propertyConnection = new URL(propertyUrl).openConnection()
-				propertyConnection.setRequestMethod("PUT")
-				propertyConnection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
-				propertyConnection.setRequestProperty("Content-Type", "application/json")
-				propertyConnection.setDoOutput(true)
-				
-				def propertyData = [
-					groupName: "dtc",
-					propertyName: "cluster", 
-					propertyValue: '["internal"]',
-					propertyType: "STRING",
-					description: "Dependency Track Controller cluster assignment"
-				]
-				
-				def propertyJson = new groovy.json.JsonBuilder(propertyData).toString()
-				propertyConnection.outputStream << propertyJson.bytes
-				
-				def propResponseCode = propertyConnection.responseCode
-				if (propResponseCode >= 200 && propResponseCode < 300) {
-					println "✅ Property dtc:cluster created successfully"
-				} else {
-					println "⚠️ Failed to create dtc:cluster property: ${propResponseCode}"
-				}
-			} else {
-				println "⚠️ Could not find project to add properties"
-			}
-		} else {
-			def errorStream = connection.errorStream
-			def errorMessage = errorStream ? errorStream.text : "No details available"
-			throw new GradleException("Upload failed: ${responseCode} ${responseMessage}\\n${errorMessage}")
-		}
-	}
+dependencyTrackCompanion {
+	apiKey = project.findProperty('dtApiKey') ?: ''
+	url = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
+	projectName = project.findProperty('dtProjectName') ?: "${project.group}.${project.name}"
+	projectVersion = project.version
+	inputFile = file("$buildDir/reports/cyclonedx-direct/bom.json")
+	projectTags = [
+		new com.liftric.dtcp.model.ProjectTag('dtc-auto-internal')
+	]
 }
