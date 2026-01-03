@@ -88,20 +88,15 @@ cyclonedxBom {
 	projectType = "application"
 	componentVersion = project.version.toString()
 
-	properties = mapOf(
-  	"dtc:auto-sync" to "enabled",
-  	"dtc:cluster-type" to "internal"
-	)
+	includeConfigs = listOf("runtimeClasspath", "compileClasspath")
 }
 
 cyclonedxDirectBom {
 	projectType = "application"
 	componentVersion = project.version.toString()
 
-	properties = mapOf(
-  	"dtc:auto-sync" to "enabled",
-  	"dtc:cluster-type" to "internal"
-	)
+
+	includeConfigs = listOf("runtimeClasspath", "compileClasspath")
 }
 
 project.ext.dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
@@ -160,6 +155,16 @@ task uploadSbom {
 		formData.append("--${boundary}\r\n")
 		formData.append("Content-Disposition: form-data; name=\"autoCreate\"\r\n\r\n")
 		formData.append("true\r\n")
+		
+		// isLatest field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"isLatest\"\r\n\r\n")
+		formData.append("true\r\n")
+		
+		// dtc:cluster field
+		formData.append("--${boundary}\r\n")
+		formData.append("Content-Disposition: form-data; name=\"dtc:cluster\"\r\n\r\n")
+		formData.append("[\"internal\"]\r\n")
 		
 		// BOM file field
 		formData.append("--${boundary}\r\n")
