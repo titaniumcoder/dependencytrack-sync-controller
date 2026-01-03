@@ -5,7 +5,6 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'org.cyclonedx.bom' version '3.0.1'
 	id 'com.palantir.git-version' version '3.1.0'
-	id 'com.liftric.dependency-track-companion-plugin' version '1.3.0'
 }
 
 group = 'com.github.titaniumcoder.dtrack'
@@ -95,13 +94,145 @@ cyclonedxDirectBom {
 	componentVersion = project.version.toString()
 }
 
-dependencyTrackCompanion {
-	apiKey = project.findProperty('dtApiKey') ?: ''
-	url = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
-	projectName = project.findProperty('dtProjectName') ?: "${project.group}.${project.name}"
-	projectVersion = project.version
-	inputFile = file("$buildDir/reports/cyclonedx-direct/bom.json")
-	projectTags = [
-		new com.liftric.dtcp.model.ProjectTag('dtc-auto-internal')
-	]
+// DependencyTrack Configuration
+ext {
+	dtApiKey = project.findProperty('dtApiKey') ?: System.getenv('DT_API_KEY') ?: ''
+	dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
+	dtProjectName = project.findProperty('dtProjectName') ?: "${project.group}.${project.name}"
+	dtProjectTags = project.findProperty('dtProjectTags') ?: 'dtc-auto-internal'
+	dtIsLatest = project.findProperty('dtIsLatest')?.toBoolean() ?: true
+	dtAutoCreate = project.findProperty('dtAutoCreate')?.toBoolean() ?: true
+}
+
+// Helper function to create multipart form boundary
+def createMultipartBoundary() {
+	return "----FormBoundary" + UUID.randomUUID().toString().replaceAll('-', '')
+}
+
+// Helper function to encode multipart form field
+def encodeFormField(String boundary, String name, String value) {
+	return "--${boundary}\r\n" +
+		   "Content-Disposition: form-data; name=\"${name}\"\r\n\r\n" +
+		   "${value}\r\n"
+}
+
+// Helper function to encode multipart file field
+def encodeFileField(String boundary, String name, String filename, String content) {
+	return "--${boundary}\r\n" +
+		   "Content-Disposition: form-data; name=\"${name}\"; filename=\"${filename}\"\r\n" +
+		   "Content-Type: application/json\r\n\r\n" +
+		   "${content}\r\n"
+}
+
+// Create project in DependencyTrack
+tasks.register('createProject') {
+	group = 'dependencytrack'
+	description = 'Creates a project in DependencyTrack with proper tagging'
+	
+	doLast {
+		if (!dtApiKey) {
+			throw new GradleException("API key is required. Set dtApiKey property or DT_API_KEY environment variable")
+		}
+		
+		def projectData = [
+			name: dtProjectName,
+			version: project.version,
+			tags: [
+				[name: dtProjectTags]
+			],
+			active: true
+		]
+		
+		def json = new groovy.json.JsonBuilder(projectData).toPrettyString()
+		
+		def connection = new URL("${dtBaseUrl}/api/v1/project").openConnection() as HttpURLConnection
+		connection.setRequestMethod("PUT")
+		connection.setRequestProperty("Content-Type", "application/json")
+		connection.setRequestProperty("X-API-Key", dtApiKey)
+		connection.setDoOutput(true)
+		
+		connection.outputStream.withWriter("UTF-8") { writer ->
+			writer.write(json)
+		}
+		
+		def responseCode = connection.responseCode
+		if (responseCode == 201) {
+			println "✅ Project '${dtProjectName}' created successfully"
+		} else if (responseCode == 409) {
+			println "ℹ️  Project '${dtProjectName}' already exists"
+		} else {
+			def errorText = connection.errorStream?.text ?: "Unknown error"
+			throw new GradleException("Failed to create project. HTTP ${responseCode}: ${errorText}")
+		}
+	}
+}
+
+// Upload SBOM to DependencyTrack
+tasks.register('uploadSbom') {
+	group = 'dependencytrack'
+	description = 'Uploads SBOM to DependencyTrack with project tags and latest flag'
+	dependsOn 'cyclonedxDirectBom'
+	
+	doLast {
+		if (!dtApiKey) {
+			throw new GradleException("API key is required. Set dtApiKey property or DT_API_KEY environment variable")
+		}
+		
+		def bomFile = file("$buildDir/reports/cyclonedx-direct/bom.json")
+		if (!bomFile.exists()) {
+			throw new GradleException("BOM file not found: ${bomFile.absolutePath}. Run 'cyclonedxDirectBom' first.")
+		}
+		
+		def bomContent = bomFile.text
+		def boundary = createMultipartBoundary()
+		
+		// Build multipart form data
+		def formData = new StringBuilder()
+		formData.append(encodeFormField(boundary, "autoCreate", dtAutoCreate.toString()))
+		formData.append(encodeFormField(boundary, "projectName", dtProjectName))
+		formData.append(encodeFormField(boundary, "projectVersion", project.version.toString()))
+		formData.append(encodeFormField(boundary, "projectTags", dtProjectTags))
+		formData.append(encodeFormField(boundary, "isLatest", dtIsLatest.toString()))
+		formData.append(encodeFileField(boundary, "bom", "bom.json", bomContent))
+		formData.append("--${boundary}--\r\n")
+		
+		def connection = new URL("${dtBaseUrl}/api/v1/bom").openConnection() as HttpURLConnection
+		connection.setRequestMethod("POST")
+		connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=${boundary}")
+		connection.setRequestProperty("X-API-Key", dtApiKey)
+		connection.setDoOutput(true)
+		
+		connection.outputStream.withWriter("UTF-8") { writer ->
+			writer.write(formData.toString())
+		}
+		
+		def responseCode = connection.responseCode
+		if (responseCode == 200) {
+			def response = connection.inputStream.text
+			def jsonResponse = new groovy.json.JsonSlurper().parseText(response)
+			println "✅ SBOM uploaded successfully"
+			println "   Project: ${dtProjectName}"
+			println "   Version: ${project.version}"
+			println "   Tags: ${dtProjectTags}"
+			println "   Latest: ${dtIsLatest}"
+			println "   Token: ${jsonResponse.token}"
+		} else {
+			def errorText = connection.errorStream?.text ?: "Unknown error"
+			throw new GradleException("Failed to upload SBOM. HTTP ${responseCode}: ${errorText}")
+		}
+	}
+}
+
+// Combined task for complete workflow
+tasks.register('deployToDependencyTrack') {
+	group = 'dependencytrack'
+	description = 'Complete workflow: create project, generate SBOM, and upload to DependencyTrack'
+	dependsOn 'createProject', 'uploadSbom'
+	
+	doLast {
+		println "\n🎉 Complete DependencyTrack deployment finished!"
+		println "   Project: ${dtProjectName}"
+		println "   Version: ${project.version}"
+		println "   URL: ${dtBaseUrl}/projects"
+	}
 }
