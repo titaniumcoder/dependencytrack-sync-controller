@@ -86,10 +86,22 @@ tasks.named('test') {
 
 cyclonedxBom {
 	projectType = "application"
+	componentVersion = project.version.toString()
+
+	properties = mapOf(
+  	"dtc:auto-sync" to "enabled",
+  	"dtc:cluster-type" to "internal"
+	)
 }
 
 cyclonedxDirectBom {
 	projectType = "application"
+	componentVersion = project.version.toString()
+
+	properties = mapOf(
+  	"dtc:auto-sync" to "enabled",
+  	"dtc:cluster-type" to "internal"
+	)
 }
 
 project.ext.dtBaseUrl = project.findProperty('dtBaseUrl') ?: 'http://localhost:30080'
