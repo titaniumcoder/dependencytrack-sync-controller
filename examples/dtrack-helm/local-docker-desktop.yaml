@@ -10,6 +10,21 @@ apiServer:
     enabled: true
     className: "dtrack-local-storage"  # Use our custom storage class
     size: "4Gi"
+  # Add init container to fix permissions
+  initContainers:
+    - name: fix-permissions
+      image: busybox:1.35
+      command:
+        - sh
+        - -c
+        - |
+          chmod 777 /data
+          chown -R 1000:1000 /data || true
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      securityContext:
+        runAsUser: 0
   service:
     type: NodePort
     nodePort: 30080
