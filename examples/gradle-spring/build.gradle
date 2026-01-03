@@ -157,11 +157,6 @@ task uploadSbom {
 		formData.append("Content-Disposition: form-data; name=\"isLatest\"\r\n\r\n")
 		formData.append("true\r\n")
 		
-		// Properties field for dtc:cluster
-		formData.append("--${boundary}\r\n")
-		formData.append("Content-Disposition: form-data; name=\"properties\"\r\n\r\n")
-		formData.append('{"dtc:cluster": ["internal"]}\r\n')
-		
 		// BOM file field
 		formData.append("--${boundary}\r\n")
 		formData.append("Content-Disposition: form-data; name=\"bom\"\r\n\r\n")
@@ -176,6 +171,57 @@ task uploadSbom {
 		
 		if (responseCode >= 200 && responseCode < 300) {
 			println "✅ SBOM uploaded successfully (${responseCode})"
+			
+			// Now create the dtc:cluster property
+			def response = connection.inputStream.text
+			def jsonSlurper = new groovy.json.JsonSlurper()
+			def result = jsonSlurper.parseText(response)
+			def token = result.token
+			
+			println "🔧 Creating project properties..."
+			
+			// Wait a bit for the BOM to be processed
+			Thread.sleep(2000)
+			
+			// Find the project UUID by searching for it
+			def projectSearchUrl = "${project.ext.dtBaseUrl}/api/v1/project"
+			def searchConnection = new URL("${projectSearchUrl}?name=${URLEncoder.encode(project.ext.dtProjectName, 'UTF-8')}").openConnection()
+			searchConnection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
+			
+			def projectsResponse = searchConnection.inputStream.text
+			def projectsResult = jsonSlurper.parseText(projectsResponse)
+			
+			if (projectsResult && projectsResult.size() > 0) {
+				def projectUuid = projectsResult[0].uuid
+				
+				// Create dtc:cluster property
+				def propertyUrl = "${project.ext.dtBaseUrl}/api/v1/project/${projectUuid}/property"
+				def propertyConnection = new URL(propertyUrl).openConnection()
+				propertyConnection.setRequestMethod("PUT")
+				propertyConnection.setRequestProperty("X-API-Key", project.ext.dtApiKey)
+				propertyConnection.setRequestProperty("Content-Type", "application/json")
+				propertyConnection.setDoOutput(true)
+				
+				def propertyData = [
+					groupName: "dtc",
+					propertyName: "cluster", 
+					propertyValue: '["internal"]',
+					propertyType: "STRING",
+					description: "Dependency Track Controller cluster assignment"
+				]
+				
+				def propertyJson = new groovy.json.JsonBuilder(propertyData).toString()
+				propertyConnection.outputStream << propertyJson.bytes
+				
+				def propResponseCode = propertyConnection.responseCode
+				if (propResponseCode >= 200 && propResponseCode < 300) {
+					println "✅ Property dtc:cluster created successfully"
+				} else {
+					println "⚠️ Failed to create dtc:cluster property: ${propResponseCode}"
+				}
+			} else {
+				println "⚠️ Could not find project to add properties"
+			}
 		} else {
 			def errorStream = connection.errorStream
 			def errorMessage = errorStream ? errorStream.text : "No details available"
